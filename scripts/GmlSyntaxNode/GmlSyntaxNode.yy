@@ -1,0 +1,13 @@
+{
+  "$GMScript":"",
+  "%Name":"GmlSyntaxNode",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"GmlSyntaxNode",
+  "parent":{
+    "name":"Scripts",
+    "path":"folders/Scripts.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}
