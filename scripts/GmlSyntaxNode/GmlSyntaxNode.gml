@@ -26,9 +26,7 @@ function GmlSyntaxNode(_span) constructor {
 	};
 }
 
-function GmlDocument(_span, _statements) : GmlSyntaxNode(
-	_span
-) constructor {
+function GmlDocument(_span, _statements) : GmlSyntaxNode(_span) constructor {
 	kind = "document";
 	statements = _statements;
 }

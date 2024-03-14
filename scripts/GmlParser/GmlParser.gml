@@ -244,6 +244,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		if (!accept(GmlTokenKind.FUNCTION)) {
 			return undefined;
 		}
+
 		var _identifier = identifier();
 		var _parameter_list = expect_defined(parameter_list());
 		var _constructor_clause = undefined;
@@ -923,7 +924,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 				[_start.start_index + 2, accepted.end_index - 1],
 				_text
 			);
-			return GmlTemplateStringLiteral(get_span(_start), [_string_literal]);
+			return new GmlTemplateStringLiteral(get_span(_start), [_string_literal]);
 		} else if (
 			accept(GmlTokenKind.HEX_INTEGER_LITERAL)
 			|| accept(GmlTokenKind.BINARY_LITERAL)
