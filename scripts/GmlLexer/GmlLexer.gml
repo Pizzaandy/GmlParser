@@ -294,8 +294,7 @@ function GmlLexer(_source_text, _tab_width = 4) constructor {
 					}
 					if (match("{")) {
 						return token(GmlTokenKind.TEMPLATE_START);
-					}
-					if (match("\"")) {
+					} else if (match("\"")) {
 						return token(GmlTokenKind.SIMPLE_TEMPLATE_STRING);
 					}
 

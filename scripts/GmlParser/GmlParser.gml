@@ -65,11 +65,32 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		GmlTokenKind.MODULO,
 		GmlTokenKind.INTEGER_DIVIDE
 	];
+    
+    __statements = [
+    	block,
+    	if_statement,
+    	function_declaration,
+        assignment_or_expression_statement,
+    	do_statement,
+    	while_statement,
+    	with_statement,
+    	repeat_statement,
+    	for_statement,
+    	throw_statement,
+    	continue_statement,
+    	break_statement,
+    	exit_statement,
+    	return_statement,
+    	switch_statement,
+    	try_statement,
+    	delete_statement,
+    	enum_declaration
+    ];
 
 	static __additive_operators = [GmlTokenKind.PLUS, GmlTokenKind.MINUS];
 
 	static throw_syntax_error = function(_message) {
-		throw _message;
+		throw $"Syntax Error at line {line_number}, column {column_number}: " + _message;
 	};
 
 	static get_ast = function(pretty = true) {
@@ -153,17 +174,21 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 	static process_token = function(_token) {};
 
+	static get_span = function(_start_token) {
+		return [_start_token.start_index, accepted.end_index];
+	};
+
 	static document = function() {
 		var _start = token;
-		var statements = statement_list();
+		var _statements = statement_list();
 		if (!hit_eof) {
 			throw_default_syntax_error();
 		}
-		return new GmlDocument(_start.start_index, accepted.end_index, statements);
+		return new GmlDocument(get_span(_start), _statements);
 	};
 
 	static statement_list = function() {
-		var statements = [];
+		var _statements = [];
 
 		while (!hit_eof) {
 			if (accept(GmlTokenKind.SEMI_COLON)) {
@@ -171,39 +196,20 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			}
 			var _statement = statement(false);
 			if (!is_undefined(_statement)) {
-				array_push(statements, _statement);
+				array_push(_statements, _statement);
 			} else {
 				break;
 			}
 		}
 
-		return statements;
+		return _statements;
 	};
 
 	static statement = function(_accept_semicolons = true) {
 		var _matched_statement = undefined;
-		var _statement_functions = [
-			block,
-			if_statement,
-			function_declaration,
-			do_statement,
-			while_statement,
-			with_statement,
-			repeat_statement,
-			for_statement,
-			throw_statement,
-			continue_statement,
-			break_statement,
-			exit_statement,
-			return_statement,
-			switch_statement,
-			try_statement,
-			delete_statement,
-			assignment_or_expression_statement
-		];
 
-		for (var i = 0; i < array_length(_statement_functions); i++) {
-			_matched_statement = _statement_functions[i]();
+		for (var i = 0; i < array_length(__statements); i++) {
+			_matched_statement = __statements[i]();
 			if (!is_undefined(_matched_statement)) {
 				break;
 			}
@@ -218,9 +224,9 @@ function GmlParser(_code, _tab_width = 4) constructor {
 				}
 			}
 			return _matched_statement;
-		}
-
-		return undefined;
+		} else {
+            return undefined;
+        }
 	};
 
 	static block = function() {
@@ -230,7 +236,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		}
 		var _statements = statement_list();
 		expect(GmlTokenKind.CLOSE_BRACE);
-		return new GmlBlock(_start.start_index, accepted.end_index, _statements);
+		return new GmlBlock(get_span(_start), _statements);
 	};
 
 	static function_declaration = function() {
@@ -245,22 +251,19 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		if (accept(GmlTokenKind.COLON)) {
 			expect(GmlTokenKind.IDENTIFIER);
 			var _parent_name = new GmlIdentifier(
-				accepted.start_index,
-				accepted.end_index,
+				get_span(accepted),
 				accepted.text
 			);
 			var _parent_args = expect_defined(argument_list());
 			expect(GmlTokenKind.CONSTRUCTOR);
 			_constructor_clause = new GmlConstructorClause(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_parent_name,
 				_parent_args
 			);
 		} else if (accept(GmlTokenKind.CONSTRUCTOR)) {
 			_constructor_clause = new GmlConstructorClause(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				undefined,
 				undefined
 			);
@@ -269,8 +272,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		var _body = expect_defined(statement());
 
 		return new GmlFunctionDeclaration(
-			_start.start_index,
-			accepted.end_index,
+			get_span(_start),
 			_identifier,
 			_parameter_list,
 			_body,
@@ -301,8 +303,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 				}
 			}
 			return new GmlVariableDeclarationList(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_declarations,
 				_modifier
 			);
@@ -324,14 +325,14 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 			if (!accept_any(__assignment_operators)) {
 				throw_default_syntax_error();
+                return undefined;
 			}
 
 			var _assignment_operator = accepted.text;
 			var _rhs = expect_defined(expression());
-
+            
 			return new GmlAssignmentExpression(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_assignment_operator,
 				_lhs,
 				_rhs
@@ -350,12 +351,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			_expression = expect_defined(expression());
 		}
 
-		return new GmlVariableDeclaration(
-			_start.start_index,
-			accepted.end_index,
-			_name,
-			_expression
-		);
+		return new GmlVariableDeclaration(get_span(_start), _name, _expression);
 	};
 
 	static if_statement = function() {
@@ -373,13 +369,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			_alternate = expect_defined(statement());
 		}
 
-		return new GmlIfStatement(
-			_start.start_index,
-			accepted.end_index,
-			_condition,
-			_statement,
-			_alternate
-		);
+		return new GmlIfStatement(get_span(_start), _condition, _statement, _alternate);
 	};
 
 	static do_statement = function() {
@@ -392,7 +382,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		expect(GmlTokenKind.UNTIL);
 		var _test = expect_defined(expression());
 
-		return new GmlDoStatement(_start.start_index, accepted.end_index, _body, _test);
+		return new GmlDoStatement(get_span(_start), _body, _test);
 	};
 
 	static while_statement = function() {
@@ -404,12 +394,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		var _test = expect_defined(expression());
 		var _body = expect_defined(statement());
 
-		return new GmlWhileStatement(
-			_start.start_index,
-			accepted.end_index,
-			_body,
-			_test
-		);
+		return new GmlWhileStatement(get_span(_start), _body, _test);
 	};
 
 	static with_statement = function() {
@@ -421,12 +406,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		var _expression = expect_defined(expression());
 		var _body = expect_defined(statement());
 
-		return new GmlWithStatement(
-			_start.start_index,
-			accepted.end_index,
-			_body,
-			_expression
-		);
+		return new GmlWithStatement(get_span(_start), _body, _expression);
 	};
 
 	static repeat_statement = function() {
@@ -438,12 +418,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		var _expression = expect_defined(expression());
 		var _body = expect_defined(statement());
 
-		return new GmlRepeatStatement(
-			_start.start_index,
-			accepted.end_index,
-			_body,
-			_expression
-		);
+		return new GmlRepeatStatement(get_span(_start), _body, _expression);
 	};
 
 	static for_statement = function() {
@@ -461,14 +436,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		expect(GmlTokenKind.CLOSE_PAREN);
 		var _body = expect_defined(statement());
 
-		return new GmlForStatement(
-			_start.start_index,
-			accepted.end_index,
-			_init,
-			_test,
-			_update,
-			_body
-		);
+		return new GmlForStatement(get_span(_start), _init, _test, _update, _body);
 	};
 
 	static switch_statement = function() {
@@ -499,12 +467,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 		expect(GmlTokenKind.CLOSE_BRACE);
 
-		return new GmlSwitchStatement(
-			_start.start_index,
-			accepted.end_index,
-			_expression,
-			_cases
-		);
+		return new GmlSwitchStatement(get_span(_start), _expression, _cases);
 	};
 
 	static switch_case = function() {
@@ -513,22 +476,12 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			var _test = expect_defined(expression());
 			expect(GmlTokenKind.COLON);
 			var _statements = statement_list();
-			return new GmlSwitchCase(
-				_start.start_index,
-				accepted.end_index,
-				_test,
-				_statements
-			);
+			return new GmlSwitchCase(get_span(_start), _test, _statements);
 		} else if (accept(GmlTokenKind.DEFAULT)) {
 			var _start = accepted;
 			expect(GmlTokenKind.COLON);
 			var _statements = statement_list();
-			return new GmlSwitchCase(
-				_start.start_index,
-				accepted.end_index,
-				undefined,
-				_statements
-			);
+			return new GmlSwitchCase(get_span(_start), undefined, _statements);
 		} else {
 			return undefined;
 		}
@@ -553,8 +506,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			}
 			var _body = expect_defined(statement());
 			_catch = new GmlCatchClause(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_identifier,
 				_body
 			);
@@ -564,34 +516,81 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			_finally = expect_defined(statement());
 		}
 
-		return new GmlTryStatement(
-			_start.start_index,
-			accepted.end_index,
-			_try_body,
-			_catch,
-			_finally
-		);
+		return new GmlTryStatement(get_span(_start), _try_body, _catch, _finally);
+	};
+
+	static enum_declaration = function() {
+		var _start = token;
+		if (!accept(GmlTokenKind.ENUM)) {
+			return undefined;
+		}
+		var _identifier = expect_defined(identifier());
+
+		expect(GmlTokenKind.OPEN_BRACE);
+		if (accept(GmlTokenKind.CLOSE_BRACE)) {
+			return new GmlEnumDeclaration(get_span(_start), []);
+		}
+
+		var _members = [];
+		var _expect_delimiter = false;
+		var _ended_on_closing_delimiter = false;
+
+		while (!hit_eof) {
+			if (_expect_delimiter) {
+				expect(GmlTokenKind.COMMA);
+				_expect_delimiter = false;
+			} else {
+				var _member = expect_defined(enum_member());
+				array_push(_members, _member);
+				_expect_delimiter = true;
+			}
+			if (accept(GmlTokenKind.CLOSE_BRACE)) {
+				_ended_on_closing_delimiter = true;
+				break;
+			}
+		}
+
+		if (!_ended_on_closing_delimiter) {
+			throw_expected("}");
+		}
+
+		return new GmlEnumDeclaration(get_span(_start), _members);
+	};
+
+	static enum_member = function() {
+		var _start = token;
+		var _identifier = expect_defined(identifier());
+		if (is_undefined(_identifier)) {
+			return undefined;
+		}
+
+		var _expression = undefined;
+		if (accept(GmlTokenKind.ASSIGN)) {
+			_expression = expect_defined(expression());
+		}
+
+		return new GmlEnumMember(get_span(_start), _identifier, _expression);
 	};
 
 	static continue_statement = function() {
 		if (!accept(GmlTokenKind.CONTINUE)) {
 			return undefined;
 		}
-		return new GmlContinueStatement(accepted.start_index, accepted.end_index);
+		return new GmlContinueStatement(get_span(_start));
 	};
 
 	static break_statement = function() {
 		if (!accept(GmlTokenKind.BREAK)) {
 			return undefined;
 		}
-		return new GmlBreakStatement(accepted.start_index, accepted.end_index);
+		return new GmlBreakStatement(get_span(_start));
 	};
 
 	static exit_statement = function() {
 		if (!accept(GmlTokenKind.EXIT)) {
 			return undefined;
 		}
-		return new GmlExitStatement(accepted.start_index, accepted.end_index);
+		return new GmlExitStatement(get_span(_start));
 	};
 
 	static return_statement = function() {
@@ -600,11 +599,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			return undefined;
 		}
 		var _expression = expression();
-		return new GmlReturnStatement(
-			_start.start_index,
-			accepted.end_index,
-			_expression
-		);
+		return new GmlReturnStatement(get_span(_start), _expression);
 	};
 
 	static throw_statement = function() {
@@ -613,7 +608,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			return undefined;
 		}
 		var _expression = expression();
-		return new GmlThrowStatement(_start.start_index, accepted.end_index, _expression);
+		return new GmlThrowStatement(get_span(_start), _expression);
 	};
 
 	static delete_statement = function() {
@@ -622,11 +617,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			return undefined;
 		}
 		var _expression = expression();
-		return new GmlDeleteStatement(
-			_start.start_index,
-			accepted.end_index,
-			_expression
-		);
+		return new GmlDeleteStatement(get_span(_start), _expression);
 	};
 
 	// static region_statement = function() {
@@ -665,8 +656,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			expect(GmlTokenKind.COLON);
 			var _when_false = expect_defined(expression());
 			return new GmlConditionalExpression(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_when_true,
 				_when_false
 			);
@@ -686,8 +676,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			var _operator = accepted.text;
 			var _right_expr = expect_defined(_next_func());
 			_result = new GmlBinaryExpression(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_operator,
 				_result,
 				_right_expr
@@ -757,8 +746,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			var _operator = accepted.text;
 			var _primary_expression = expect_defined(primary_expression());
 			return new GmlUnaryExpression(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				_operator,
 				_primary_expression,
 				true
@@ -794,8 +782,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			) {
 				var _operator = accepted.text;
 				_object = new GmlUnaryExpression(
-					_start.start_index,
-					accepted.end_index,
+					get_span(_start),
 					_operator,
 					_object,
 					false
@@ -817,27 +804,20 @@ function GmlParser(_code, _tab_width = 4) constructor {
 					}
 				}
 
-				_object = new MemberIndexExpression(
-					_start.start_index,
-					accepted.end_index,
+				_object = new GmlMemberIndexExpression(
+					get_span(_start),
 					_object,
 					_properties,
 					_accessor
 				);
 			} else if (accept(GmlTokenKind.DOT)) {
 				var _identifier = expect_defined(identifier());
-				return new GmlMemberDotExpression(
-					_start.start_index,
-					accepted.end_index,
-					_object,
-					_identifier
-				);
+				return new GmlMemberDotExpression(get_span(_start), _object, _identifier);
 			} else {
 				var _arguments = argument_list();
 				if (!is_undefined(_arguments)) {
 					_object = new GmlCallExpression(
-						_start.start_index,
-						accepted.end_index,
+						get_span(_start),
 						_object,
 						_arguments
 					);
@@ -865,11 +845,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 		if (accept(GmlTokenKind.NEW)) {
 			var _newable_expression = expect_defined(primary_expression(false));
-			return new GmlNewExpression(
-				_start.start_index,
-				accepted.end_index,
-				_newable_expression
-			);
+			return new GmlNewExpression(get_span(_start), _newable_expression);
 		}
 
 		if (accept(GmlTokenKind.OPEN_PAREN)) {
@@ -911,18 +887,12 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 			if (accept(GmlTokenKind.COMMA)) {
 				if (_previous_child_was_punctuator) {
-					array_push(
-						_arguments,
-						new UndefinedLiteral(_start.start_index, accepted.end_index)
-					);
+					array_push(_arguments, new GmlUndefinedLiteral(get_span(_start)));
 				}
 				_previous_child_was_punctuator = true;
 			} else if (accept(GmlTokenKind.CLOSE_PAREN)) {
 				if (_previous_child_was_punctuator && array_length(_arguments) > 0) {
-					array_push(
-						_arguments,
-						new GmlUndefinedLiteral(_start.start_index, accepted.end_index)
-					);
+					array_push(_arguments, new GmlUndefinedLiteral(get_span(_start)));
 				}
 				_ended_on_closing_delimiter = true;
 				break;
@@ -941,62 +911,38 @@ function GmlParser(_code, _tab_width = 4) constructor {
 
 	static literal = function() {
 		var _start = token;
-
+        
 		if (accept(GmlTokenKind.UNDEFINED)) {
-			return new GmlUndefinedLiteral(_start.start_index, accepted.end_index);
+			return new GmlUndefinedLiteral(get_span(_start));
 		} else if (accept(GmlTokenKind.INTEGER_LITERAL)) {
-			return new GmlIntegerLiteral(
-				_start.start_index,
-				accepted.end_index,
-				real(accepted.text)
-			);
+			return new GmlIntegerLiteral(get_span(_start), real(accepted.text));
 		} else if (accept(GmlTokenKind.DECIMAL_LITERAL)) {
-			return new GmlDecimalLiteral(
-				_start.start_index,
-				accepted.end_index,
-				real(accepted.text)
-			);
+			return new GmlDecimalLiteral(get_span(_start), real(accepted.text));
 		} else if (accept(GmlTokenKind.STRING_LITERAL)) {
-			return new GmlStringLiteral(
-				_start.start_index,
-				accepted.end_index,
-				accepted.text
-			);
+            var _text = trim_chars(accepted.text, 1, 1);
+			return new GmlStringLiteral(get_span(_start), _text);
 		} else if (accept(GmlTokenKind.VERBATIM_STRING_LITERAL)) {
-			return new GmlGmlVerbatimStringLiteral(
-				_start.start_index,
-				accepted.end_index,
-				accepted.text
-			);
+            var _text = trim_chars(accepted.text, 2, 1);
+			return new GmlVerbatimStringLiteral(get_span(_start), _text);
 		} else if (accept(GmlTokenKind.SIMPLE_TEMPLATE_STRING)) {
-			var _text = string_copy(
-				accepted.text,
-				_start.start_index + 1,
-				string_length(accepted.text) - 1
-			);
-			var _string_literal = new StringLiteral(
-				_start.start_index + 2,
-				accepted.end_index - 1,
+			var _text = trim_chars(token.text, 2, 1);
+			var _string_literal = new GmlStringLiteral(
+				[_start.start_index + 2, accepted.end_index - 1],
 				_text
 			);
-			return GmlTemplateStringLiteral(_start.start_index, accepted.end_index, []);
+			return GmlTemplateStringLiteral(get_span(_start), [_string_literal]);
 		} else if (
 			accept(GmlTokenKind.HEX_INTEGER_LITERAL)
 			|| accept(GmlTokenKind.BINARY_LITERAL)
 		) {
 			return new GmlBinaryLiteral(
-				_start.start_index,
-				accepted.end_index,
+				get_span(_start),
 				real(accepted.text)
 			);
 		} else if (accept(GmlTokenKind.BOOLEAN_LITERAL)) {
-			return new GmlBooleanLiteral(
-				_start.start_index,
-				accepted.end_index,
-				bool(accepted.text)
-			);
+			return new GmlBooleanLiteral(get_span(_start), bool(accepted.text));
 		} else if (accept(GmlTokenKind.NOONE)) {
-			return new GmlNoOneLiteral(_start.start_index, accepted.end_index);
+			return new GmlNoOneLiteral(get_span(_start));
 		}
 
 		var _array = array_literal();
@@ -1024,7 +970,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		}
 
 		if (accept(GmlTokenKind.CLOSE_BRACKET)) {
-			return new GmlArrayLiteral(_start.start_index, accepted.end_index, []);
+			return new GmlArrayLiteral(get_span(_start), []);
 		}
 
 		var _elements = [];
@@ -1050,7 +996,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			throw_expected("]");
 		}
 
-		return new GmlArrayLiteral(_start.start_index, accepted.end_index, _elements);
+		return new GmlArrayLiteral(get_span(_start), _elements);
 	};
 
 	static struct_literal = function() {
@@ -1060,7 +1006,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 		}
 
 		if (accept(GmlTokenKind.CLOSE_BRACE)) {
-			return new GmlStructLiteral(_start.start_index, accepted.end_index, []);
+			return new GmlStructLiteral(get_span(_start), []);
 		}
 
 		var _properties = [];
@@ -1086,7 +1032,7 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			throw_expected("}");
 		}
 
-		return new GmlStructLiteral(_start.start_index, accepted.end_index, _properties);
+		return new GmlStructLiteral(get_span(_start), _properties);
 	};
 
 	static property_assignment = function() {
@@ -1099,17 +1045,9 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			|| accept(GmlTokenKind.CONSTRUCTOR)
 			|| accept(GmlTokenKind.NOONE)
 		) {
-			_name = new GmlIdentifier(
-				_start.start_index,
-				accepted.end_index,
-				accepted.text
-			);
+			_name = new GmlIdentifier(get_span(_start), accepted.text);
 		} else if (accept(GmlTokenKind.STRING_LITERAL)) {
-			_name = new GmlStringLiteral(
-				_start.start_index,
-				accepted.end_index,
-				accepted.text
-			);
+			_name = new GmlStringLiteral(get_span(_start), accepted.text);
 		} else {
 			return undefined;
 		}
@@ -1118,27 +1056,25 @@ function GmlParser(_code, _tab_width = 4) constructor {
 			_initializer = expect_defined(expression());
 		}
 
-		return new StructProperty(
-			_start.start_index,
-			accepted.end_index,
-			_name,
-			_initializer
-		);
+		return new GmlStructProperty(get_span(_start), _name, _initializer);
 	};
 
 	static template_string_literal = function() {
 		// TODO: do later lmao
-		return undefined;
+        return undefined;
 	};
 
 	static identifier = function() {
 		if (accept(GmlTokenKind.IDENTIFIER) || accept(GmlTokenKind.CONSTRUCTOR)) {
-			return new GmlIdentifier(
-				accepted.start_index,
-				accepted.end_index,
-				accepted.text
-			);
+			return new GmlIdentifier(get_span(accepted), accepted.text);
 		}
 		return undefined;
 	};
+    
+    static trim_chars = function(_str, _left_count, _right_count) {
+        if (string_length(_str) <= _left_count + _right_count) {
+            return "";
+        }
+        return string_copy(_str, _left_count + 1, string_length(_str) - _right_count - 1);
+    }
 }
